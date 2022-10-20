@@ -1,30 +1,61 @@
-########
-#DIGITS#
-########
+#########################
+#           DIGITS      #
+#########################
+
+
+from fnmatch import fnmatchcase
 
 
 DIGITS = "0123456789"
 
-########
-#ERRORS#
-########
+######################
+#        ERRORS      #
+######################
 
 
 class Error:
-    def __init__(self, error_name, details) -> None:
+    def __init__(self, position_start, position_end, error_name, details) -> None:
+        self.pos_start = position_start
+        self.pos_end = position_end
         self.error_name = error_name
         self.details = details
     
     def as_string(self):
-        return f'{self.error_name}: {self.details}'
+        result = f'{self.error_name}: {self.details}\n'
+        result += f'File {self.pos_start.filename}, line {self.pos_start.line + 1}'
+        return result
 
 
 class IllegalCharError(Error):
-    def __init__(self, details) -> None:
-        super().__init__("Illegal Character", details)
-########
-#TOKENS#
-########
+    def __init__(self, pos_start, pos_end, details) -> None:
+        super().__init__(pos_start, pos_end, "Illegal Character", details)
+
+################################
+#            POSITION          #
+################################
+
+class Position:
+    def __init__(self, idx, ln, col,fn, ftxt) -> None:
+        self.index = idx
+        self.line = ln
+        self.column = col
+        self.filename = fn
+        self.filetxt = ftxt
+
+    def advance(self, curr_char):
+        self.index += 1
+        self.column += 1
+        
+        if curr_char == '\n':
+            self.line += 1
+            self.column = 0
+        return self
+
+    def copy(self):
+        return Position(self.index, self.line, self.column, self.filename, self.filetxt)
+################################
+#          TOKENS              #
+################################
 
 
 TOKEN_INT = 'INT'
@@ -47,21 +78,22 @@ class Token:
         return f'{self.type}'
 
 
-#######
-#LEXER#
-#######
+#########################
+#        LEXER          #
+#########################
 
 class Lexer:
-    def __init__(self,text) -> None:
+    def __init__(self, fn, text) -> None:
+        self.filename = fn
         self.text = text
-        self.position = -1
+        self.position = Position(-1,0,-1, fn, text)
         self.curr_char = None
         self.advance()
 
     def advance(self) -> None:
-        self.position += 1
-        if self.position < len(self.text):
-            self.curr_char = self.text[self.position]
+        self.position.advance(self.curr_char)
+        if self.position.index < len(self.text):
+            self.curr_char = self.text[self.position.index]
         else:
             self.curr_char = None
         
@@ -92,9 +124,10 @@ class Lexer:
                 tokens.append(Token(TOKEN_LPAREN))
                 self.advance()
             else:
+                pos_start = self.position.copy()
                 char = self.curr_char
                 self.advance()
-                return [], IllegalCharError("'" + char + "'")
+                return [], IllegalCharError(pos_start, self.position, "'" + char + "'")
 
 
         return tokens, None
@@ -127,7 +160,7 @@ class Lexer:
 
 
 
-def run(text):
-    lexer = Lexer(text)
+def run(fn, text):
+    lexer = Lexer(fn, text)
     tokens, error = lexer.make_tokens()
     return tokens, error
